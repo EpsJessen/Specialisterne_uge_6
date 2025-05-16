@@ -6,6 +6,7 @@
 import mysql.connector
 from get_path import my_creds_path
 import json
+import polars as pl
 
 
 # Class for handling interactions with a MySQL server and database
@@ -20,13 +21,22 @@ class Connector:
     _passwd: str
     dbname: str
 
-    def __init__(self, credentials_file, dbname: str = "orders", exists: bool = True):
-
+    def __init__(self, credentials_file, dbname: str = "bikes", exists: bool = True):
         with open(credentials_file) as json_credentials:
             credentials: dict = json.load(json_credentials)
         self.host = credentials.get("host")
         self.user = credentials.get("user")
         self._passwd = credentials.get("passwd")
+        self.dbname = dbname
+        self._connection = None
+        self._set_connection(exists)
+        if not exists:
+            self._createdb()
+
+    def __init__(self, user:str, password:str, host: str = "localhost", dbname: str = "bikes", exists: bool = True):
+        self.host = host
+        self.user = user
+        self._passwd = password
         self.dbname = dbname
         self._connection = None
         self._set_connection(exists)
@@ -65,6 +75,7 @@ class Connector:
     # Returns a cursorobject for the connection
     def _get_cursor(self):
         if self._connection:
+            self._connection.reconnect()
             return self._connection.cursor()
 
     # Ensures that the connection points to the database
@@ -92,6 +103,10 @@ class Connector:
     # Executes a single SQL query of a type assaying the database (READ)
     def executeR(self, sql: str):
         cursor = self._get_cursor()
+        table = pl.read_database(sql, cursor)
+        cursor.close()
+        return table
+
         cursor.execute(sql)
         result = cursor.fetchall()
         columns = cursor.column_names
